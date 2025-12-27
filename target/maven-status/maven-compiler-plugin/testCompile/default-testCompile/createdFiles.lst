@@ -1,0 +1,12 @@
+com\example\vacancyscraper\benchmark\MapBenchmarkRunner.class
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_jmhType_B2.class
+com\example\vacancyscraper\benchmark\MapBenchmark.class
+com\example\vacancyscraper\parser\HhVacancyParserTest.class
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_jmhType.class
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_jmhType_B3.class
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_putConcurrent_jmhTest.class
+com\example\vacancyscraper\parser\ParsersSupportsTest.class
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_putSynchronized_jmhTest.class
+META-INF\BenchmarkList
+com\example\vacancyscraper\benchmark\jmh_generated\MapBenchmark_jmhType_B1.class
+META-INF\CompilerHints

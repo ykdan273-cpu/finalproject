@@ -30,6 +30,6 @@ public class RestExceptionHandler {
     public ResponseEntity<Map<String, String>> handleCommon(Exception ex) {
         Map<String, String> body = new HashMap<>();
         body.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 }

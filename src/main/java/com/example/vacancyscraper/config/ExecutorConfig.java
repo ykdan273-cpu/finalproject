@@ -8,9 +8,8 @@ import org.springframework.context.annotation.Configuration;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PostConstruct;
@@ -21,12 +20,7 @@ public class ExecutorConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ExecutorConfig.class);
 
-    private final ExecutorService executorService = new ThreadPoolExecutor(
-            Math.max(4, Runtime.getRuntime().availableProcessors()),
-            Math.max(4, Runtime.getRuntime().availableProcessors()),
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            daemonFactory("vacancy-worker-"));
+    private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
 
     @Bean
     public ExecutorService executorService() {
@@ -45,10 +39,7 @@ public class ExecutorConfig {
     public void startExecutorLogger() {
         Thread loggerThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
-                if (executorService instanceof ThreadPoolExecutor tpe) {
-                    log.info("Executor stats: poolSize={}, active={}, queue={}",
-                            tpe.getPoolSize(), tpe.getActiveCount(), tpe.getQueue().size());
-                }
+                log.info("Executor stats: pool (virtual threads) running");
                 try {
                     Thread.sleep(60000);
                 } catch (InterruptedException e) {
