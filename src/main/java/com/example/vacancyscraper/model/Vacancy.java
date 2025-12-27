@@ -1,18 +1,41 @@
 package com.example.vacancyscraper.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.time.LocalDate;
 
+@Entity
+@Table(name = "vacancies")
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Vacancy {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long id;
+
     private String title;
     private String company;
     private String salary;
+
+    @Column(length = 4000)
     private String requirements;
     private String city;
     private LocalDate publishedDate;
+
+    @Enumerated(EnumType.STRING)
     private VacancySource source;
+
+    @Column(unique = true, nullable = false)
     private String url;
 
     public Vacancy() {
@@ -28,6 +51,10 @@ public class Vacancy {
         this.publishedDate = publishedDate;
         this.source = source;
         this.url = url;
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public String getTitle() {

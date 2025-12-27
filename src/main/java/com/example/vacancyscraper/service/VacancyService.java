@@ -4,7 +4,6 @@ import com.example.vacancyscraper.model.ParsingStats;
 import com.example.vacancyscraper.model.Vacancy;
 import com.example.vacancyscraper.model.VacancySource;
 import com.example.vacancyscraper.parser.VacancySiteParser;
-import com.example.vacancyscraper.storage.VacancyFileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,9 +20,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -40,25 +37,23 @@ public class VacancyService {
     private static final Logger log = LoggerFactory.getLogger(VacancyService.class);
 
     private final List<VacancySiteParser> parsers;
-    private final VacancyFileRepository repository;
+    private final VacancyPersistenceService vacancyPersistenceService;
     private final ExecutorService executorService;
     private final HttpClient httpClient;
     private final String userAgent;
 
-    // безопасные потоки(атомарные величины)
-    private final ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
     private final AtomicInteger successCounter = new AtomicInteger();
     private final AtomicInteger errorCounter = new AtomicInteger();
     private final AtomicReference<Instant> lastBatchStarted = new AtomicReference<>();
     private final AtomicLong lastBatchDurationMs = new AtomicLong();
 
     public VacancyService(List<VacancySiteParser> parsers,
-                          VacancyFileRepository repository,
+                          VacancyPersistenceService vacancyPersistenceService,
                           ExecutorService executorService,
                           HttpClient httpClient,
                           @Value("${vacancy.user-agent}") String userAgent) {
         this.parsers = parsers;
-        this.repository = repository;
+        this.vacancyPersistenceService = vacancyPersistenceService;
         this.executorService = executorService;
         this.httpClient = httpClient;
         this.userAgent = userAgent;
@@ -66,22 +61,22 @@ public class VacancyService {
 
     public Vacancy parseSingle(String url) {
         VacancySiteParser parser = resolveParser(url);
+        log.info("Starting single parse for url={} using parser={}", url, parser.getClass().getSimpleName());
         FutureTask<Vacancy> task = new FutureTask<>(() -> fetchAndParse(url, parser));
         Thread thread = new Thread(task, parser.getClass().getSimpleName() + "-thread");
         thread.start();
         try {
             Vacancy vacancy = task.get();
-            repository.save(vacancy);
+            Vacancy saved = vacancyPersistenceService.saveWithLock(vacancy);
             successCounter.incrementAndGet();
-            return vacancy;
+            log.info("Parsed and saved vacancy url={}, title='{}', source={}, id={}", url, saved.getTitle(), saved.getSource(), saved.getId());
+            return saved;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             errorCounter.incrementAndGet();
-            errorMessages.add("Interrupted: " + url);
             throw new IllegalStateException("Parsing interrupted", e);
         } catch (ExecutionException e) {
             errorCounter.incrementAndGet();
-            errorMessages.add(e.getMessage());
             throw new IllegalStateException("Failed to parse " + url, e);
         }
     }
@@ -92,6 +87,7 @@ public class VacancyService {
         }
         Instant start = Instant.now();
         lastBatchStarted.set(start);
+        log.info("Starting batch parse for {} urls", urls.size());
 
         List<Callable<Vacancy>> tasks = urls.stream()
                 .map(url -> (Callable<Vacancy>) () -> fetchAndParse(url, resolveParser(url)))
@@ -103,19 +99,19 @@ public class VacancyService {
             for (Future<Vacancy> future : futures) {
                 try {
                     Vacancy vacancy = future.get();
-                    repository.save(vacancy);
+                    Vacancy savedVacancy = vacancyPersistenceService.saveWithLock(vacancy);
                     successCounter.incrementAndGet();
-                    result.add(vacancy);
+                    log.info("Saved vacancy from batch url={}, title='{}', source={}", savedVacancy.getUrl(), savedVacancy.getTitle(), savedVacancy.getSource());
+                    result.add(savedVacancy);
                 } catch (ExecutionException e) {
                     errorCounter.incrementAndGet();
-                    errorMessages.add(e.getMessage());
                     log.warn("Failed to parse vacancy in batch", e);
                 }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             errorCounter.incrementAndGet();
-            errorMessages.add("Batch interrupted");
+            log.warn("Batch parsing interrupted", e);
         }
         long duration = Duration.between(start, Instant.now()).toMillis();
         lastBatchDurationMs.set(duration);
@@ -124,21 +120,19 @@ public class VacancyService {
     }
 
     public List<Vacancy> findAll(String city, VacancySource source, String sortBy, boolean useParallel) {
-        List<Vacancy> vacancies = repository.findAll();
         long started = System.nanoTime();
+        List<Vacancy> vacancies = vacancyPersistenceService.findAll();
         Stream<Vacancy> stream = useParallel ? vacancies.parallelStream() : vacancies.stream();
 
-        Stream<Vacancy> filtered = stream
-                .filter(v -> city == null || (v.getCity() != null && v.getCity().toLowerCase().contains(city.toLowerCase())))
-                .filter(v -> source == null || v.getSource() == source);
-
         Comparator<Vacancy> comparator = buildComparator(sortBy);
-        List<Vacancy> result = filtered
+        List<Vacancy> result = stream
+                .filter(v -> city == null || (v.getCity() != null && v.getCity().toLowerCase().contains(city.toLowerCase())))
+                .filter(v -> source == null || v.getSource() == source)
                 .sorted(comparator)
                 .collect(Collectors.toList());
 
         long durationMs = (System.nanoTime() - started) / 1_000_000;
-        log.info("Filtered {} vacancies using {} stream in {} ms", result.size(), useParallel ? "parallel" : "sequential", durationMs);
+        log.info("Fetched {} vacancies with filters city='{}', source={}, sortBy={}, durationMs={}", result.size(), city, source, sortBy, durationMs);
         return result;
     }
 
@@ -151,13 +145,9 @@ public class VacancyService {
         );
     }
 
-    public List<String> getErrors() {
-        return new ArrayList<>(errorMessages);
-    }
-
     private Comparator<Vacancy> buildComparator(String sortBy) {
         if (sortBy == null) {
-            return Comparator.comparing(v -> Optional.ofNullable(v.getTitle()).orElse(""));
+            return Comparator.comparing(v -> v.getTitle() == null ? "" : v.getTitle(), String.CASE_INSENSITIVE_ORDER);
         }
         switch (sortBy.toLowerCase()) {
             case "date":
@@ -180,11 +170,14 @@ public class VacancyService {
                     .header("User-Agent", userAgent)
                     .GET()
                     .build();
+            log.info("Sending request to url={} with parser={}", url, parser.getClass().getSimpleName());
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 String html = response.body();
+                log.info("Received response status={} contentLength={} for url={}", response.statusCode(), html.length(), url);
                 Vacancy vacancy = parser.parse(url, html);
                 vacancy.setUrl(url);
+                log.info("Parsed vacancy url={}, title='{}', source={}", url, vacancy.getTitle(), vacancy.getSource());
                 return vacancy;
             }
             throw new IllegalStateException("Bad response code: " + response.statusCode());

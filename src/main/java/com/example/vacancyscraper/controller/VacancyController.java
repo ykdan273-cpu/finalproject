@@ -7,6 +7,7 @@ import com.example.vacancyscraper.model.Vacancy;
 import com.example.vacancyscraper.model.VacancySource;
 import com.example.vacancyscraper.service.VacancyService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,10 +37,10 @@ public class VacancyController {
     }
 
     @Operation(
-            summary = "Парсинг одной ссылки",
-            description = "Вставьте ссылку на страницу вакансии (hh.ru, superjob.ru, career.habr.com, rabota.ru) для одиночного парсинга"
+            summary = "Распарсить одну вакансию",
+            description = "Парсит вакансию по переданной ссылке (hh.ru, superjob.ru, career.habr.com, rabota.ru) и сохраняет в хранилище."
     )
-    @ApiResponse(responseCode = "200", description = "Ваш результат",
+    @ApiResponse(responseCode = "200", description = "Успешно распарсено",
             content = @Content(schema = @Schema(implementation = Vacancy.class)))
     @PostMapping("/parse")
     public ResponseEntity<Vacancy> parseSingle(@Valid @RequestBody ParseRequest request) {
@@ -48,10 +49,10 @@ public class VacancyController {
     }
 
     @Operation(
-            summary = "парсинг ссылок",
-            description = "Список ссылок на страницы вакансий. Все ссылки будут обрабатываться параллельно через ExecutorService"
+        summary = "Распарсить несколько вакансий",
+        description = "Принимает список ссылок на вакансии и парсит их параллельно с помощью пула потоков."
     )
-    @ApiResponse(responseCode = "200", description = "описание вакнсий",
+    @ApiResponse(responseCode = "200", description = "Успешно распарсено",
             content = @Content(schema = @Schema(implementation = Vacancy.class)))
     @PostMapping("/parse-batch")
     public ResponseEntity<List<Vacancy>> parseBatch(@Valid @RequestBody ParseBatchRequest request) {
@@ -59,19 +60,26 @@ public class VacancyController {
         return ResponseEntity.ok(vacancies);
     }
 
-    @Operation(summary = "Список  вакансий")
+    @Operation(
+            summary = "Список вакансий",
+            description = "Возвращает список вакансий с фильтрацией по городу и источнику, сортировкой и выбором параллельной обработки."
+    )
     @GetMapping("/answer")
     public ResponseEntity<List<Vacancy>> findAll(
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) VacancySource source,
-            @RequestParam(required = false, defaultValue = "title") String sortBy,
-            @RequestParam(required = false, defaultValue = "false") boolean parallel
+            @Parameter(description = "Фильтр по названию города (частичное совпадение).")
+            @RequestParam(name = "city", required = false) String city,
+            @Parameter(description = "Источник вакансий: HH, SUPERJOB, HABR, RABOTA.")
+            @RequestParam(name = "source", required = false) VacancySource source,
+            @Parameter(description = "Сортировка: title (по умолчанию), date, salary.")
+            @RequestParam(name = "sortBy", required = false, defaultValue = "title") String sortBy,
+            @Parameter(description = "Использовать parallelStream для фильтрации.")
+            @RequestParam(name = "parallel", required = false, defaultValue = "false") boolean parallel
     ) {
         List<Vacancy> vacancies = vacancyService.findAll(city, source, sortBy, parallel);
         return ResponseEntity.ok(vacancies);
     }
 
-    @Operation(summary = "статистика")
+    @Operation(summary = "Статистика парсинга")
     @GetMapping("/stats")
     public ResponseEntity<ParsingStats> stats() {
         return ResponseEntity.ok(vacancyService.getStats());
