@@ -4,6 +4,7 @@ import com.example.vacancyscraper.model.ParsingStats;
 import com.example.vacancyscraper.model.Vacancy;
 import com.example.vacancyscraper.model.VacancySource;
 import com.example.vacancyscraper.parser.VacancySiteParser;
+import com.example.vacancyscraper.storage.VacancyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,7 @@ public class VacancyService {
 
     private final List<VacancySiteParser> parsers;
     private final VacancyPersistenceService vacancyPersistenceService;
+    private final VacancyRepository vacancyRepository;
     private final ExecutorService executorService;
     private final HttpClient httpClient;
     private final String userAgent;
@@ -49,11 +51,13 @@ public class VacancyService {
 
     public VacancyService(List<VacancySiteParser> parsers,
                           VacancyPersistenceService vacancyPersistenceService,
+                          VacancyRepository vacancyRepository,
                           ExecutorService executorService,
                           HttpClient httpClient,
                           @Value("${vacancy.user-agent}") String userAgent) {
         this.parsers = parsers;
         this.vacancyPersistenceService = vacancyPersistenceService;
+        this.vacancyRepository = vacancyRepository;
         this.executorService = executorService;
         this.httpClient = httpClient;
         this.userAgent = userAgent;
@@ -137,12 +141,9 @@ public class VacancyService {
     }
 
     public ParsingStats getStats() {
-        return new ParsingStats(
-                successCounter.get(),
-                errorCounter.get(),
-                lastBatchStarted.get(),
-                lastBatchDurationMs.get()
-        );
+        long totalParsed = vacancyRepository.count();
+        long totalErrors = errorCounter.get();
+        return new ParsingStats(totalParsed, totalErrors, lastBatchStarted.get(), lastBatchDurationMs.get());
     }
 
     private Comparator<Vacancy> buildComparator(String sortBy) {

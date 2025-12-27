@@ -3,34 +3,34 @@ package com.example.vacancyscraper.model;
 import java.time.Instant;
 
 public class ParsingStats {
-    private int totalParsed;
-    private int totalErrors;
+    private long totalParsed;
+    private long totalErrors;
     private Instant lastBatchStartedAt;
     private long lastBatchDurationMs;
 
     public ParsingStats() {
     }
 
-    public ParsingStats(int totalParsed, int totalErrors, Instant lastBatchStartedAt, long lastBatchDurationMs) {
+    public ParsingStats(long totalParsed, long totalErrors, Instant lastBatchStartedAt, long lastBatchDurationMs) {
         this.totalParsed = totalParsed;
         this.totalErrors = totalErrors;
         this.lastBatchStartedAt = lastBatchStartedAt;
         this.lastBatchDurationMs = lastBatchDurationMs;
     }
 
-    public int getTotalParsed() {
+    public long getTotalParsed() {
         return totalParsed;
     }
 
-    public void setTotalParsed(int totalParsed) {
+    public void setTotalParsed(long totalParsed) {
         this.totalParsed = totalParsed;
     }
 
-    public int getTotalErrors() {
+    public long getTotalErrors() {
         return totalErrors;
     }
 
-    public void setTotalErrors(int totalErrors) {
+    public void setTotalErrors(long totalErrors) {
         this.totalErrors = totalErrors;
     }
 
