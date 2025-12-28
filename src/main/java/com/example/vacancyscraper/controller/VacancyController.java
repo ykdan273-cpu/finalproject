@@ -27,7 +27,7 @@ import java.util.List;
 @RestController
 @Validated
 @RequestMapping
-@Tag(name = "Vacancy Parser API")
+@Tag(name = "API парсера вакансий")
 public class VacancyController {
 
     private final VacancyService vacancyService;
@@ -37,10 +37,10 @@ public class VacancyController {
     }
 
     @Operation(
-            summary = "Распарсить одну вакансию",
-            description = "Парсит вакансию по переданной ссылке (hh.ru, superjob.ru, career.habr.com, rabota.ru) и сохраняет в хранилище."
+            summary = "Распарсить одну вакансию по URL",
+            description = "Загружает страницу вакансии (hh.ru, superjob.ru, career.habr.com, rabota.ru) и возвращает распарсенный объект."
     )
-    @ApiResponse(responseCode = "200", description = "Успешно распарсено",
+    @ApiResponse(responseCode = "200", description = "Успешно распарсенная вакансия",
             content = @Content(schema = @Schema(implementation = Vacancy.class)))
     @PostMapping("/parse")
     public ResponseEntity<Vacancy> parseSingle(@Valid @RequestBody ParseRequest request) {
@@ -50,9 +50,9 @@ public class VacancyController {
 
     @Operation(
         summary = "Распарсить несколько вакансий",
-        description = "Принимает список ссылок на вакансии и парсит их параллельно с помощью пула потоков."
+        description = "Принимает список URL, парсит каждую вакансию и возвращает результаты. Ошибки по отдельным ссылкам логируются."
     )
-    @ApiResponse(responseCode = "200", description = "Успешно распарсено",
+    @ApiResponse(responseCode = "200", description = "Успешно распарсенные вакансии",
             content = @Content(schema = @Schema(implementation = Vacancy.class)))
     @PostMapping("/parse-batch")
     public ResponseEntity<List<Vacancy>> parseBatch(@Valid @RequestBody ParseBatchRequest request) {
@@ -61,25 +61,25 @@ public class VacancyController {
     }
 
     @Operation(
-            summary = "Список вакансий",
-            description = "Возвращает список вакансий с фильтрацией по городу и источнику, сортировкой и выбором параллельной обработки."
+            summary = "Получить все сохранённые вакансии",
+            description = "Фильтрация по городу и источнику, сортировка по title/date/salary, опционально parallelStream."
     )
     @GetMapping("/answer")
     public ResponseEntity<List<Vacancy>> findAll(
-            @Parameter(description = "Фильтр по названию города (частичное совпадение).")
+            @Parameter(description = "Фильтр по городу (подстрока, регистр игнорируется).")
             @RequestParam(name = "city", required = false) String city,
-            @Parameter(description = "Источник вакансий: HH, SUPERJOB, HABR, RABOTA.")
+            @Parameter(description = "Источник вакансии: HH, SUPERJOB, HABR, RABOTA.")
             @RequestParam(name = "source", required = false) VacancySource source,
-            @Parameter(description = "Сортировка: title (по умолчанию), date, salary.")
+            @Parameter(description = "Сортировка: title, date, salary.")
             @RequestParam(name = "sortBy", required = false, defaultValue = "title") String sortBy,
-            @Parameter(description = "Использовать parallelStream для фильтрации.")
+            @Parameter(description = "Использовать parallelStream для сортировки/фильтрации.")
             @RequestParam(name = "parallel", required = false, defaultValue = "false") boolean parallel
     ) {
         List<Vacancy> vacancies = vacancyService.findAll(city, source, sortBy, parallel);
         return ResponseEntity.ok(vacancies);
     }
 
-    @Operation(summary = "Статистика парсинга")
+    @Operation(summary = "Получить статистику парсинга")
     @GetMapping("/stats")
     public ResponseEntity<ParsingStats> stats() {
         return ResponseEntity.ok(vacancyService.getStats());

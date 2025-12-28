@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Vacancy Parser: Polling vs WebSocket</title>
+    <style>
+        :root {
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #111827;
+            background: #f4f5f7;
+        }
+        body {
+            margin: 0;
+        }
+        .layout {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px 24px 32px;
+        }
+        h1 {
+            margin: 0 0 12px;
+            font-size: 24px;
+        }
+        .panel {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.04);
+        }
+        .panel h2 {
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+        label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .inline {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .inline label {
+            margin-bottom: 0;
+            font-weight: 500;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 16px;
+        }
+        button {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 8px 20px rgba(37,99,235,0.25);
+        }
+        button.secondary {
+            background: #6b7280;
+            box-shadow: none;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .metric {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .metric .label {
+            color: #6b7280;
+            font-size: 12px;
+        }
+        .metric .value {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        pre {
+            background: #0f172a;
+            color: #e5e7eb;
+            border-radius: 10px;
+            padding: 14px;
+            overflow: auto;
+            max-height: 320px;
+        }
+        .log {
+            background: #0b1220;
+            color: #d1d5db;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 90px;
+            max-height: 220px;
+            overflow-y: auto;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 13px;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #0ea5e9;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 0.02em;
+        }
+        .status-pill.success { background: #ecfdf3; color: #16a34a; }
+        .status-pill.error { background: #fef2f2; color: #dc2626; }
+        .status-pill.wait { background: #ede9fe; color: #7c3aed; }
+        .small {
+            color: #6b7280;
+            font-size: 12px;
+        }
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <h1>Сравнение: REST + polling против WebSocket</h1>
+        <div class="panel controls">
+            <div>
+                <label for="url">Ссылка на вакансию для парсинга</label>
+                <input id="url" type="text" value="https://hh.ru/vacancy/000000" />
+                <div class="inline" style="margin-top: 10px;">
+                    <label><input type="radio" name="mode" value="polling" checked> REST + polling (500 мс)</label>
+                    <label><input type="radio" name="mode" value="ws"> WebSocket push</label>
+                </div>
+                <div class="inline" style="margin-top: 10px;">
+                    <label><input id="delayToggle" type="checkbox"> Имитация долгой обработки (5 секунд)</label>
+                    <label>Своя задержка, мс <input id="delayMs" type="number" min="0" value="0" style="width: 120px;"></label>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: flex-end; justify-content: flex-end;">
+                <button id="startBtn">Запустить</button>
+                <button id="resetBtn" class="secondary">Сброс</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Метрики</h2>
+            <div class="metrics-grid">
+                <div class="metric">
+                    <div class="label">Статус</div>
+                    <div class="value" id="status">
+                        <span class="status-pill wait">ожидание</span>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="label">Job ID</div>
+                    <div class="value" id="jobId">—</div>
+                </div>
+                <div class="metric">
+                    <div class="label">HTTP-запросов (polling)</div>
+                    <div class="value" id="httpCount">0</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Получено байт</div>
+                    <div class="value" id="bytes">0</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Время до результата, мс</div>
+                    <div class="value" id="duration">0</div>
+                </div>
+                <div class="metric">
+                    <div class="label">Режим</div>
+                    <div class="value" id="modeLabel">REST + polling</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Результат</h2>
+            <pre id="result">{}</pre>
+        </div>
+
+        <div class="panel">
+            <h2>Лог обмена</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            mode: "polling",
+            jobId: null,
+            startTs: null,
+            pollTimer: null,
+            ws: null,
+            httpRequests: 0,
+            bytes: 0
+        };
+
+        const startBtn = document.getElementById("startBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const urlInput = document.getElementById("url");
+        const delayToggle = document.getElementById("delayToggle");
+        const delayMsInput = document.getElementById("delayMs");
+        const statusEl = document.getElementById("status");
+        const jobIdEl = document.getElementById("jobId");
+        const httpCountEl = document.getElementById("httpCount");
+        const bytesEl = document.getElementById("bytes");
+        const durationEl = document.getElementById("duration");
+        const modeEl = document.getElementById("modeLabel");
+        const resultEl = document.getElementById("result");
+        const logEl = document.getElementById("log");
+
+        document.querySelectorAll("input[name='mode']").forEach(radio => {
+            radio.addEventListener("change", () => {
+                state.mode = radio.value;
+                modeEl.textContent = radio.value === "polling" ? "REST + polling" : "WebSocket";
+            });
+        });
+
+        delayToggle.addEventListener("change", () => {
+            if (delayToggle.checked) {
+                delayMsInput.value = "5000";
+            }
+        });
+
+        startBtn.addEventListener("click", async () => {
+            resetState(false);
+            const url = urlInput.value.trim();
+            if (!url) {
+                pushLog("Введите URL для парсинга");
+                return;
+            }
+            const delay = delayToggle.checked ? 5000 : Number(delayMsInput.value || 0);
+            const payload = JSON.stringify({ url, delayMs: delay });
+            let data, status;
+            try {
+                ({ data, status } = await fetchJsonWithMetrics("/api/jobs", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: payload
+                }));
+            } catch (err) {
+                pushLog("Ошибка сети: " + err.message);
+                setStatus("Ошибка", "error");
+                return;
+            }
+            if (!data || !data.jobId) {
+                pushLog("Не удалось создать задачу, статус: " + status);
+                setStatus("Ошибка создания задачи", "error");
+                return;
+            }
+            state.jobId = data.jobId;
+            state.startTs = performance.now();
+            jobIdEl.textContent = data.jobId;
+            setStatus("Задача принята", "wait");
+            pushLog(`Создана задача ${data.jobId} (режим ${state.mode})`);
+
+            if (state.mode === "polling") {
+                startPolling();
+            } else {
+                openWebSocket();
+            }
+        });
+
+        resetBtn.addEventListener("click", () => resetState(true));
+
+        function resetState(clearResult = true) {
+            if (state.pollTimer) {
+                clearInterval(state.pollTimer);
+                state.pollTimer = null;
+            }
+            if (state.ws) {
+                state.ws.close();
+                state.ws = null;
+            }
+            state.jobId = null;
+            state.startTs = null;
+            state.httpRequests = 0;
+            state.bytes = 0;
+            httpCountEl.textContent = "0";
+            bytesEl.textContent = "0";
+            durationEl.textContent = "0";
+            jobIdEl.textContent = "—";
+            setStatus("ожидание", "wait");
+            if (clearResult) {
+                resultEl.textContent = "{}";
+                logEl.textContent = "";
+            }
+        }
+
+        function setStatus(text, type) {
+            const className = type === "success" ? "status-pill success" :
+                type === "error" ? "status-pill error" : "status-pill wait";
+            statusEl.innerHTML = `<span class="${className}">${text}</span>`;
+        }
+
+        async function startPolling() {
+            const poll = async () => {
+                if (!state.jobId) {
+                    return;
+                }
+                try {
+                    const { data, status } = await fetchJsonWithMetrics(`/api/jobs/${state.jobId}/status`);
+                    if (!data) {
+                        pushLog("Пустой ответ при опросе, статус " + status);
+                        return;
+                    }
+                    updateFromJob(data);
+                    if (data.status === "SUCCESS" || data.status === "ERROR") {
+                        finalizeTiming();
+                        clearInterval(state.pollTimer);
+                        state.pollTimer = null;
+                    }
+                } catch (err) {
+                    pushLog("Ошибка при опросе: " + err.message);
+                }
+            };
+            await poll();
+            state.pollTimer = setInterval(poll, 500);
+        }
+
+        function openWebSocket() {
+            const protocol = location.protocol === "https:" ? "wss" : "ws";
+            const wsUrl = `${protocol}://${location.host}/ws/parse`;
+            state.ws = new WebSocket(wsUrl);
+            state.ws.onopen = () => pushLog("WebSocket подключён");
+            state.ws.onmessage = (event) => {
+                state.bytes += event.data.length;
+                bytesEl.textContent = state.bytes.toString();
+                const data = safeParse(event.data);
+                if (!data || !data.jobId || data.jobId !== state.jobId) {
+                    return;
+                }
+                updateFromJob(data);
+                if (data.status === "SUCCESS" || data.status === "ERROR") {
+                    finalizeTiming();
+                }
+            };
+            state.ws.onerror = () => pushLog("Ошибка WebSocket");
+            state.ws.onclose = () => pushLog("WebSocket закрыт");
+        }
+
+        function updateFromJob(job) {
+            if (job.status === "SUCCESS") {
+                setStatus("Готово", "success");
+            } else if (job.status === "ERROR") {
+                setStatus("Ошибка", "error");
+            } else {
+                setStatus("В работе", "wait");
+            }
+            if (job.vacancy) {
+                resultEl.textContent = JSON.stringify(job.vacancy, null, 2);
+            }
+            if (job.durationMs) {
+                durationEl.textContent = job.durationMs.toString();
+            }
+            if (job.error) {
+                pushLog("Ошибка: " + job.error);
+            }
+        }
+
+        async function fetchJsonWithMetrics(url, options = {}) {
+            const bodyLength = options.body ? options.body.length : 0;
+            const response = await fetch(url, options);
+            const text = await response.text();
+            state.httpRequests += 1;
+            state.bytes += bodyLength + text.length;
+            httpCountEl.textContent = state.httpRequests.toString();
+            bytesEl.textContent = state.bytes.toString();
+            const data = text ? safeParse(text) : null;
+            return { data, status: response.status };
+        }
+
+        function safeParse(text) {
+            try {
+                return JSON.parse(text);
+            } catch {
+                pushLog("Не получилось прочитать JSON: " + text);
+                return null;
+            }
+        }
+
+        function finalizeTiming() {
+            if (!state.startTs) {
+                return;
+            }
+            const duration = Math.round(performance.now() - state.startTs);
+            durationEl.textContent = duration.toString();
+            pushLog("Время до результата: " + duration + " мс");
+        }
+
+        function pushLog(line) {
+            const ts = new Date().toLocaleTimeString();
+            logEl.textContent += `[${ts}] ${line}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+    </script>
+</body>
+</html>
