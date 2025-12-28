@@ -4,6 +4,7 @@ import com.example.vacancyscraper.model.Vacancy;
 import com.example.vacancyscraper.storage.VacancyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ public class VacancyPersistenceService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "vacancies", allEntries = true)
     public Vacancy saveWithLock(Vacancy vacancy) {
         Objects.requireNonNull(vacancy.getUrl(), "Vacancy url must not be null");
         return vacancyRepository.findByUrlForUpdate(vacancy.getUrl())

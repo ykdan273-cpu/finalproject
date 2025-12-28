@@ -8,6 +8,7 @@ import com.example.vacancyscraper.storage.VacancyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -123,6 +124,9 @@ public class VacancyService {
         return result;
     }
 
+    @Cacheable(cacheNames = "vacancies",
+            key = "T(java.util.Objects).hash(#city, #source, #sortBy, #parallel)",
+            sync = true)
     public List<Vacancy> findAll(String city, VacancySource source, String sortBy, boolean useParallel) {
         long started = System.nanoTime();
         List<Vacancy> vacancies = vacancyPersistenceService.findAll();
