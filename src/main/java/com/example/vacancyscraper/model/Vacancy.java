@@ -9,12 +9,19 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "vacancies")
+@Table(
+        name = "vacancies",
+        indexes = {
+                @Index(name = "idx_vacancies_url", columnList = "url", unique = true),
+                @Index(name = "idx_vacancies_city_date", columnList = "city,publishedDate")
+        }
+)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Vacancy {
 
@@ -55,6 +62,10 @@ public class Vacancy {
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getTitle() {

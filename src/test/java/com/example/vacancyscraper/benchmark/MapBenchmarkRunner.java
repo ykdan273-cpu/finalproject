@@ -14,7 +14,7 @@ public class MapBenchmarkRunner {
                 .warmupTime(TimeValue.seconds(1))
                 .measurementIterations(3)
                 .measurementTime(TimeValue.seconds(1))
-                .forks(0) // run in same JVM to avoid ForkedMain missing
+                .forks(0) 
                 .build();
         new Runner(opt).run();
     }

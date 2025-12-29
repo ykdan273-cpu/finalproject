@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.example.vacancyscraper.grpc";
+option java_outer_classname = "AnalyticsProto";
+
+package analytics;
+
+enum VacancySourceProto {
+  SOURCE_UNSPECIFIED = 0;
+  HH = 1;
+  SUPERJOB = 2;
+  HABR = 3;
+  RABOTA = 4;
+}
+
+message AnalyticsRequest {
+  string city = 1;
+  VacancySourceProto source = 2;
+}
+
+message SalaryAnalyticsResponse {
+  int64 totalVacancies = 1;
+  int64 vacanciesWithSalary = 2;
+  int32 minSalary = 3;
+  int32 maxSalary = 4;
+  double averageSalary = 5;
+  string city = 6;
+  VacancySourceProto source = 7;
+}
+
+service AnalyticsService {
+  rpc Calculate(AnalyticsRequest) returns (SalaryAnalyticsResponse);
+}
