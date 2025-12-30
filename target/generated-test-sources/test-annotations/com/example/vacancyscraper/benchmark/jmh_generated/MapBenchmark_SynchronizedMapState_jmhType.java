@@ -1,4 +1,0 @@
-package com.example.vacancyscraper.benchmark.jmh_generated;
-public class MapBenchmark_SynchronizedMapState_jmhType extends MapBenchmark_SynchronizedMapState_jmhType_B3 {
-}
-
