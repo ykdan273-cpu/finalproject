@@ -30,6 +30,7 @@ public class ExecutorConfig {
     @Bean
     public HttpClient httpClient() {
         return HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1) // уменьшаем риск "too many concurrent streams" в HTTP/2
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(15))
                 .build();

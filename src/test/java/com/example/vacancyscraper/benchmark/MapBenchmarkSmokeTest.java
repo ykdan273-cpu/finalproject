@@ -6,9 +6,7 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
 
-/**
- * Lightweight JMH run to validate benchmark setup (not for production measurements).
- */
+
 class MapBenchmarkSmokeTest {
 
     @Test
